@@ -12,11 +12,11 @@ import (
 
 var (
 	// Image to use for the box.
-	Image = "mongo:3"
-	// Port used for connect to postgres server.
+	Image = "mongo:5"
+	// Port used for connecting to MongoDB server.
 	Port = "27017"
 
-	// MongoUpWaitTime dectiates how long we should wait for post Postgresql to accept connections on {{Port}}.
+	// MongoUpWaitTime dictates how long we should wait for MongoDB to accept connections on {{Port}}.
 	MongoUpWaitTime = 10 * time.Second
 )
 
@@ -47,9 +47,13 @@ func (c *Config) url() string {
 	return url
 }
 
-// Box returns an sql.DB connection and the container running the Postgresql
+// Box returns an mgo.Session and the container running the MongoDB
 // instance. It will call t.Fatal on errors.
 func Box(t testing.TB, config *Config) (*mgo.Session, conex.Container) {
+	if config == nil {
+		config = &Config{}
+	}
+
 	c := conex.Box(t, &conex.Config{
 		Image:  Image,
 		Expose: []string{Port},
@@ -58,20 +62,29 @@ func Box(t testing.TB, config *Config) (*mgo.Session, conex.Container) {
 	config.host = c.Address()
 	config.port = Port
 
-	t.Logf("Waiting for MongoDB to accept connections")
+	t.Log("Waiting for MongoDB to accept connections")
 
-	err := c.Wait(Port, MongoUpWaitTime)
-
-	if err != nil {
-		c.Drop() // return the container
-		t.Fatal("MongoDB failed to start.", err)
+	if err := c.Wait(Port, MongoUpWaitTime); err != nil {
+		c.Drop()
+		t.Fatal("MongoDB failed to start:", err)
 	}
 
 	t.Log("MongoDB is now accepting connections")
-	db, err := mgo.Dial(config.url())
+
+	// Retry connection as MongoDB may need additional time after the port is open
+	var db *mgo.Session
+	var err error
+	for i := 0; i < 10; i++ {
+		db, err = mgo.DialWithTimeout(config.url(), 5*time.Second)
+		if err == nil {
+			break
+		}
+		t.Logf("MongoDB connection attempt %d failed: %v, retrying...", i+1, err)
+		time.Sleep(time.Second)
+	}
 
 	if err != nil {
-		c.Drop() // return the container
+		c.Drop()
 		t.Fatal(err)
 	}
 

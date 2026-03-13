@@ -17,7 +17,7 @@ func init() {
 	mongodb.MongoUpWaitTime = 20 * time.Second
 }
 
-func TestPostgres(t *testing.T) {
+func TestMongoDB(t *testing.T) {
 
 	sesh, con := mongodb.Box(t, &mongodb.Config{})
 	defer con.Drop()
