@@ -62,24 +62,24 @@ func Box(t testing.TB, config *Config) (*mgo.Session, conex.Container) {
 	config.host = c.Address()
 	config.port = Port
 
-	t.Log("Waiting for MongoDB to accept connections")
+	conex.Logf(t, "mongodb", "Waiting for MongoDB to accept connections")
 
 	if err := c.Wait(Port, MongoUpWaitTime); err != nil {
 		c.Drop()
 		t.Fatal("MongoDB failed to start:", err)
 	}
 
-	t.Log("MongoDB is now accepting connections")
+	conex.Logf(t, "mongodb", "MongoDB is now accepting connections")
 
 	// Retry connection as MongoDB may need additional time after the port is open
 	var db *mgo.Session
 	var err error
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		db, err = mgo.DialWithTimeout(config.url(), 5*time.Second)
 		if err == nil {
 			break
 		}
-		t.Logf("MongoDB connection attempt %d failed: %v, retrying...", i+1, err)
+		conex.Logf(t, "mongodb", "MongoDB connection attempt %d failed: %v, retrying...", i+1, err)
 		time.Sleep(time.Second)
 	}
 
